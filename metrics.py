@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from plots import plot_pr_curve, plot_mc_curve
-
+from utils import box_iou
 
 class ConfusionMatrix:
     # Updated version of https://github.com/kaanakan/object_detection_confusion_matrix
