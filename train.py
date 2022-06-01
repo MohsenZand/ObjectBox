@@ -30,67 +30,31 @@ from tqdm import tqdm
 import val  # for end-of-epoch mAP
 from utils import attempt_load
 from datasets import create_dataloader
-
+from model import Model
+from loss import ComputeLoss
 from utils import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
-    strip_optimizer, get_latest_run, check_dataset, check_git_status, check_img_size, check_requirements, \
-    check_file, check_yaml, check_suffix, print_args, print_mutation, set_logging, one_cycle, colorstr, methods
-from utils.downloads import attempt_download
-#from utils.loss import ComputeLoss
-from utils.plots import plot_labels, plot_evolve
-from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, intersect_dicts, select_device, torch_distributed_zero_first
-from utils.loggers.wandb.wandb_utils import check_wandb_resume
-from utils.metrics import fitness
-from utils.loggers import Loggers
-from utils.callbacks import Callbacks
+    strip_optimizer, get_latest_run, check_dataset, check_img_size, \
+    check_file, check_suffix, set_logging, one_cycle, colorstr, methods
+from plots import plot_labels
+from utils import EarlyStopping, ModelEMA, de_parallel, intersect_dicts, select_device, torch_distributed_zero_first
+from loggers import check_wandb_resume
+from metrics import fitness
+from loggers import Loggers
+from callbacks import Callbacks
 from flag_sets import *
 
 logger = logging.getLogger(__name__)
 
 
 def train(hyp, device, callbacks):
-    
-    if FLAGS.method == 'ObjectBox':
-        from model import Model
-        #from utils.loss_centerwithsizefilter import ComputeLoss
-        #from utils.loss import ComputeLoss
-        from utils.loss_paper import ComputeLoss
 
-    elif FLAGS.method == 'iou_class':
-        from model import Model
-        from exp.paper.iou_class.loss_paper import ComputeLoss
-
-    elif FLAGS.method == 'varifocal':
-        from model import Model
-        from exp.paper.varifocal_loss.loss_paper import ComputeLoss
-        
-    elif FLAGS.method == 'YOLOV5':
-        from exp.ObjectBox.model import Model
-        from exp.YOLOV5.loss import ComputeLoss
-
-    elif FLAGS.method == 'table4':
-        from model import Model
-        from exp.paper.table4.loss_paper import ComputeLoss
-
-    elif FLAGS.method == 'table5':
-        from model import Model
-        from exp.paper.table5.loss_paper import ComputeLoss
-
-    elif FLAGS.method == 'table6':
-        from model import Model
-        from exp.paper.table6.loss_paper import ComputeLoss
-
-    elif FLAGS.method == 'table7':
-        from model import Model
-        from exp.paper.table7.loss_paper import ComputeLoss
-
-
-    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze, RANK, = \
-        Path(FLAGS.save_dir), FLAGS.epochs, FLAGS.batch_size, FLAGS.weights, FLAGS.single_cls, FLAGS.evolve, FLAGS.data, FLAGS.cfg, \
+    save_dir, epochs, batch_size, weights, single_cls, data, cfg, resume, noval, nosave, workers, freeze, RANK, = \
+        Path(FLAGS.save_dir), FLAGS.epochs, FLAGS.batch_size, FLAGS.weights, FLAGS.single_cls, FLAGS.data, FLAGS.cfg, \
         FLAGS.resume, FLAGS.noval, FLAGS.nosave, FLAGS.workers, FLAGS.freeze, FLAGS.global_rank
 
     # Directories
     wdir = save_dir / 'weights'
-    (wdir.parent if evolve else wdir).mkdir(parents=True, exist_ok=True)  # make dir
+    (wdir).mkdir(parents=True, exist_ok=True)  # make dir
     last, best = wdir / 'last.pt', wdir / 'best.pt'
     results_file = save_dir / 'results.txt'
 
@@ -126,7 +90,6 @@ def train(hyp, device, callbacks):
                 callbacks.register_action(k, callback=getattr(loggers, k))
 
     # Configure
-    plots = not evolve  # create plots
     cuda = device.type != 'cpu'
     init_seeds(1 + RANK)
     with torch_distributed_zero_first(RANK):
@@ -274,8 +237,7 @@ def train(hyp, device, callbacks):
             # c = torch.tensor(labels[:, 0])  # classes
             # cf = torch.bincount(c.long(), minlength=nc) + 1.  # frequency
             # model._initialize_biases(cf.to(device))
-            if plots:
-                plot_labels(labels, names, save_dir)
+            plot_labels(labels, names, save_dir)
             
             model.half().float()  # pre-reduce anchor precision
 
@@ -356,16 +318,6 @@ def train(hyp, device, callbacks):
 
             # Forward
             with amp.autocast(enabled=cuda):
-                #####
-                '''import cv2
-                import matplotlib
-                matplotlib.use('TkAgg')
-                import matplotlib.pyplot as plt 
-                imtest = imgs[0].permute(1, 2, 0)
-                imtest = cv2.normalize(np.float32(imtest.cpu()), None, alpha = 0, beta = 255, norm_type = cv2.NORM_MINMAX, dtype = cv2.CV_32F)
-                imtest = imtest.astype(np.uint8)
-                plt.subplot(3,5,1).imshow(imtest)'''
-                #####
                 if FLAGS.visualize:
                     pred = model(imgs, visualize=save_dir)  # forward
                 else:
@@ -394,7 +346,7 @@ def train(hyp, device, callbacks):
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
                 pbar.set_description(('%10s' * 2 + '%10.4g' * 5) % (
                     f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
-                callbacks.run('on_train_batch_end', ni, model, imgs, targets, paths, plots, FLAGS.sync_bn)
+                callbacks.run('on_train_batch_end', ni, model, imgs, targets, paths, True, FLAGS.sync_bn)
 
             # end batch ------------------------------------------------------------------------------------------------
 
@@ -418,7 +370,7 @@ def train(hyp, device, callbacks):
                                                  save_dir=save_dir,
                                                  save_json=is_coco and final_epoch,
                                                  verbose=nc < 50 and final_epoch,
-                                                 plots=plots, ### and final_epoch,
+                                                 plots=True, ### and final_epoch,
                                                  callbacks=callbacks,
                                                  compute_loss=compute_loss)
 
@@ -430,7 +382,7 @@ def train(hyp, device, callbacks):
             callbacks.run('on_fit_epoch_end', log_vals, epoch, best_fitness, fi)
 
             # Save model
-            if (not nosave) or (final_epoch and not evolve):  # if save
+            if (not nosave) or (final_epoch):  # if save
                 ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'model': deepcopy(de_parallel(model)).half(),
@@ -450,38 +402,27 @@ def train(hyp, device, callbacks):
             if RANK == -1 and stopper(epoch=epoch, fitness=fi):
                 break
 
-            # Stop DDP TODO: known issues shttps://github.com/ultralytics/yolov5/pull/4576
-            # stop = stopper(epoch=epoch, fitness=fi)
-            # if RANK == 0:
-            #    dist.broadcast_object_list([stop], 0)  # broadcast 'stop' to all ranks
-
-        # Stop DPP
-        # with torch_distributed_zero_first(RANK):
-        # if stop:
-        #    break  # must break all DDP ranks
-
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training -----------------------------------------------------------------------------------------------------
     if RANK in [-1, 0]:
         logger.info(f'\n{epoch - start_epoch + 1} epochs completed in {(time.time() - t0) / 3600:.3f} hours.')
-        if not evolve:
-            if is_coco:  # COCO dataset
-                for m in [last, best] if best.exists() else [last]:  # speed, mAP tests
-                    results, _, _ = val.run(data_dict,
-                                            batch_size=batch_size // FLAGS.world_size * 2,
-                                            imgsz=imgsz,
-                                            model=attempt_load(m, device).half(),
-                                            iou_thres=0.7,  # NMS IoU threshold for best pycocotools results
-                                            single_cls=single_cls,
-                                            dataloader=val_loader,
-                                            save_dir=save_dir,
-                                            save_json=True,
-                                            plots=False)
-            # Strip optimizers
-            for f in last, best:
-                if f.exists():
-                    strip_optimizer(f)  # strip optimizers
-        callbacks.run('on_train_end', last, best, plots, epoch)
+        if is_coco:  # COCO dataset
+            for m in [last, best] if best.exists() else [last]:  # speed, mAP tests
+                results, _, _ = val.run(data_dict,
+                                        batch_size=batch_size // FLAGS.world_size * 2,
+                                        imgsz=imgsz,
+                                        model=attempt_load(m, device).half(),
+                                        iou_thres=0.7,  # NMS IoU threshold for best pycocotools results
+                                        single_cls=single_cls,
+                                        dataloader=val_loader,
+                                        save_dir=save_dir,
+                                        save_json=True,
+                                        plots=False)
+        # Strip optimizers
+        for f in last, best:
+            if f.exists():
+                strip_optimizer(f)  # strip optimizers
+        callbacks.run('on_train_end', last, best, True, epoch)
         logger.info(f"Results saved to {colorstr('bold', save_dir)}")
 
     torch.cuda.empty_cache()
@@ -494,34 +435,19 @@ def main(argv, callbacks=Callbacks()):
     FLAGS.local_rank = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
     FLAGS.global_rank = int(os.getenv('RANK', -1))
     FLAGS.world_size = int(os.getenv('WORLD_SIZE', 1))
-
     
     set_logging(FLAGS.global_rank)
-    if FLAGS.global_rank in [-1, 0]:
-        pass
-        #print_args(FILE.stem, FLAGS)
-        #check_git_status()
-        #check_requirements()
 
     # Resume
-    if FLAGS.resume and not check_wandb_resume(FLAGS) and not FLAGS.evolve:  # resume an interrupted run
+    if FLAGS.resume and not check_wandb_resume(FLAGS):  # resume an interrupted run
         ckpt = FLAGS.resume if isinstance(FLAGS.resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(ckpt), 'ERROR: --resume checkpoint does not exist'
-        '''NA
-        with open(Path(ckpt).parent.parent / 'FLAGS.yaml') as f:
-            FLAGS = argparse.Namespace(**yaml.safe_load(f))  # replace
-        FLAGS.cfg, FLAGS.weights, FLAGS.resume = '', ckpt, True  # reinstate
-        '''
         logger.info('Resuming training from %s' % ckpt)
         FLAGS.save_dir = Path(ckpt).parent.parent
 
     else:
         FLAGS.data, FLAGS.cfg, FLAGS.hyp = check_file(FLAGS.data), check_file(FLAGS.cfg), check_file(FLAGS.hyp)  # check files
         assert len(FLAGS.cfg) or len(FLAGS.weights), 'either --cfg or --weights must be specified'
-        if FLAGS.evolve:
-            FLAGS.project = 'runs/evolve'
-            FLAGS.exist_ok, FLAGS.resume = FLAGS.resume, False  # pass resume to exist_ok and disable resume
-
         FLAGS.save_dir = str(increment_path(Path(FLAGS.project) / FLAGS.name, exist_ok=FLAGS.exist_ok))
 
     # DDP mode
@@ -531,107 +457,17 @@ def main(argv, callbacks=Callbacks()):
         assert torch.cuda.device_count() > FLAGS.local_rank, 'insufficient CUDA devices for DDP command'
         assert FLAGS.batch_size % FLAGS.world_size == 0, '--batch-size must be multiple of CUDA device count'
         assert not FLAGS.image_weights, '--image-weights argument is not compatible with DDP training'
-        assert not FLAGS.evolve, '--evolve argument is not compatible with DDP training'
         torch.cuda.set_device(FLAGS.local_rank)
         device = torch.device('cuda', FLAGS.local_rank)
         dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")  # distributed backend
 
 
     # Train
-    if not FLAGS.evolve:
-        train(FLAGS.hyp, device, callbacks)
-        if FLAGS.world_size > 1 and FLAGS.global_rank == 0:
-            logger.info('Destroying process group... ')
-            dist.destroy_process_group()
+    train(FLAGS.hyp, device, callbacks)
+    if FLAGS.world_size > 1 and FLAGS.global_rank == 0:
+        logger.info('Destroying process group... ')
+        dist.destroy_process_group()
         
-
-    # Evolve hyperparameters (optional)
-    else:
-        # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
-        meta = {'lr0': (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
-                'lrf': (1, 0.01, 1.0),  # final OneCycleLR learning rate (lr0 * lrf)
-                'momentum': (0.3, 0.6, 0.98),  # SGD momentum/Adam beta1
-                'weight_decay': (1, 0.0, 0.001),  # optimizer weight decay
-                'warmup_epochs': (1, 0.0, 5.0),  # warmup epochs (fractions ok)
-                'warmup_momentum': (1, 0.0, 0.95),  # warmup initial momentum
-                'warmup_bias_lr': (1, 0.0, 0.2),  # warmup initial bias lr
-                'box': (1, 0.02, 0.2),  # box loss gain
-                'cls': (1, 0.2, 4.0),  # cls loss gain
-                'cls_pw': (1, 0.5, 2.0),  # cls BCELoss positive_weight
-                'obj': (1, 0.2, 4.0),  # obj loss gain (scale with pixels)
-                'obj_pw': (1, 0.5, 2.0),  # obj BCELoss positive_weight
-                'iou_t': (0, 0.1, 0.7),  # IoU training threshold
-                'anchor_t': (1, 2.0, 8.0),  # anchor-multiple threshold
-                'anchors': (2, 2.0, 10.0),  # anchors per output grid (0 to ignore)
-                'fl_gamma': (0, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
-                'hsv_h': (1, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
-                'hsv_s': (1, 0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
-                'hsv_v': (1, 0.0, 0.9),  # image HSV-Value augmentation (fraction)
-                'degrees': (1, 0.0, 45.0),  # image rotation (+/- deg)
-                'translate': (1, 0.0, 0.9),  # image translation (+/- fraction)
-                'scale': (1, 0.0, 0.9),  # image scale (+/- gain)
-                'shear': (1, 0.0, 10.0),  # image shear (+/- deg)
-                'perspective': (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
-                'flipud': (1, 0.0, 1.0),  # image flip up-down (probability)
-                'fliplr': (0, 0.0, 1.0),  # image flip left-right (probability)
-                'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
-                'mixup': (1, 0.0, 1.0),  # image mixup (probability)
-                'copy_paste': (1, 0.0, 1.0)}  # segment copy-paste (probability)
-
-        with open(FLAGS.hyp) as f:
-            hyp = yaml.safe_load(f)  # load hyps dict
-            if 'anchors' not in hyp:  # anchors commented in hyp.yaml
-                hyp['anchors'] = 3
-        
-        FLAGS.noval, FLAGS.nosave, save_dir = True, True, Path(FLAGS.save_dir)  # only val/save final epoch
-        # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
-        evolve_yaml, evolve_csv = save_dir / 'hyp_evolve.yaml', save_dir / 'evolve.csv'
-        if FLAGS.bucket:
-            os.system(f'gsutil cp gs://{FLAGS.bucket}/evolve.csv {save_dir}')  # download evolve.csv if exists
-
-        for _ in range(FLAGS.evolve):  # generations to evolve
-            if evolve_csv.exists():  # if evolve.csv exists: select best hyps and mutate
-                # Select parent(s)
-                parent = 'single'  # parent selection method: 'single' or 'weighted'
-                x = np.loadtxt(evolve_csv, ndmin=2, delimiter=',', skiprows=1)
-                n = min(5, len(x))  # number of previous results to consider
-                x = x[np.argsort(-fitness(x))][:n]  # top n mutations
-                w = fitness(x) - fitness(x).min() + 1E-6  # weights (sum > 0)
-                if parent == 'single' or len(x) == 1:
-                    # x = x[random.randint(0, n - 1)]  # random selection
-                    x = x[random.choices(range(n), weights=w)[0]]  # weighted selection
-                elif parent == 'weighted':
-                    x = (x * w.reshape(n, 1)).sum(0) / w.sum()  # weighted combination
-
-                # Mutate
-                mp, s = 0.8, 0.2  # mutation probability, sigma
-                npr = np.random
-                npr.seed(int(time.time()))
-                g = np.array([meta[k][0] for k in hyp.keys()])  # gains 0-1
-                ng = len(meta)
-                v = np.ones(ng)
-                while all(v == 1):  # mutate until a change occurs (prevent duplicates)
-                    v = (g * (npr.random(ng) < mp) * npr.randn(ng) * npr.random() * s + 1).clip(0.3, 3.0)
-                for i, k in enumerate(hyp.keys()):  # plt.hist(v.ravel(), 300)
-                    hyp[k] = float(x[i + 7] * v[i])  # mutate
-
-            # Constrain to limits
-            for k, v in meta.items():
-                hyp[k] = max(hyp[k], v[1])  # lower limit
-                hyp[k] = min(hyp[k], v[2])  # upper limit
-                hyp[k] = round(hyp[k], 5)  # significant digits
-
-            # Train mutation
-            results = train(hyp.copy(), device, callbacks)
-
-            # Write mutation results
-            print_mutation(results, hyp.copy(), save_dir, opt.bucket)
-
-        # Plot results
-        plot_evolution(evolve_csv)
-        print(f'Hyperparameter evolution finished\n'
-              f"Results saved to {colorstr('bold', save_dir)}\n"
-              f'Use best hyperparameters example: $ python train.py --hyp {evolve_yaml}')
 
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='objectbox.pt')

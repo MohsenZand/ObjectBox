@@ -1,10 +1,11 @@
+import imp
 import warnings
 from threading import Thread
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-
-
+from utils import colorstr, emojis, de_parallel
+from plots import plot_images
 
 LOGGERS = ('csv', 'tb', 'wandb')  # text-file, TensorBoard, Weights & Biases
 
@@ -41,7 +42,7 @@ class Loggers():
 
         # TensorBoard
         s = self.save_dir / 'logs'
-        if 'tb' in self.include and not self.opt.evolve:
+        if 'tb' in self.include:
             prefix = colorstr('TensorBoard: ')
             self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
             self.tb = SummaryWriter(str(s))
@@ -131,14 +132,11 @@ class Loggers():
         if self.wandb:
             self.wandb.log({"Results": [wandb.Image(str(f), caption=f.name) for f in files]})
             # Calling wandb.log. TODO: Refactor this into WandbLogger.log_model
-            if not self.opt.evolve:
-                wandb.log_artifact(str(best if best.exists() else last), type='model',
-                                   name='run_' + self.wandb.wandb_run.id + '_model',
-                                   aliases=['latest', 'best', 'stripped'])
-                self.wandb.finish_run()
-            else:
-                self.wandb.finish_run()
-                self.wandb = WandbLogger(self.opt)
+            
+            wandb.log_artifact(str(best if best.exists() else last), type='model',
+                                name='run_' + self.wandb.wandb_run.id + '_model',
+                                aliases=['latest', 'best', 'stripped'])
+            self.wandb.finish_run()
 
 
 

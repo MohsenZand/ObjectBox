@@ -10,13 +10,13 @@ exp = 'pascal'
 
 if exp == 'coco':
     # GENERAL
-    flags.DEFINE_string('cfg',  str(ROOT / 'models/objectBox_COCO_boost.yaml'), 'models/objectbox_coco.yaml, null if load weights, model.yaml path')
+    flags.DEFINE_string('cfg',  str(ROOT / 'config/objectBox_COCO.yaml'), 'models/objectbox_coco.yaml, null if load weights, model.yaml path')
     flags.DEFINE_string('data',  str(ROOT / 'data/coco.yaml'), 'data.yaml path, coco128.yaml, coco2017.yaml') ###
     flags.DEFINE_string('exp', 'coco', 'coco or pascal')  ###
 
 elif exp == 'pascal':
     # GENERAL 
-    flags.DEFINE_string('cfg', str(ROOT / 'models/objectBox_VOC_boost.yaml'), 'models/objectbox_coco.yaml, null if load weights, model.yaml path')
+    flags.DEFINE_string('cfg', str(ROOT / 'config/objectBox_VOC.yaml'), 'models/objectbox_coco.yaml, null if load weights, model.yaml path')
     flags.DEFINE_string('data', str(ROOT / 'data/VOC.yaml'), 'data.yaml path, coco128.yaml, coco2017.yaml') ###
     flags.DEFINE_string('exp', 'pascal', 'coco or pascal')  ###
 
@@ -28,13 +28,13 @@ flags.DEFINE_bool('WANDB', False, 'wandb?')
 
 flags.DEFINE_string('weights', '', 'pretrain weights, checkpoint path, objectbox.pt in test time')
 #flags.DEFINE_string('weights', '/media/mohsen/myDrive/runs/ObjectBox/COCO_hype_cls_iou_class/weights/best.pt', 'pretrain weights, checkpoint path, objectbox.pt in test time')
-flags.DEFINE_string('hyp',  str(ROOT / 'data/hyps/hyp.scratch_1st.yaml'), 'hyperparameters path')
+flags.DEFINE_string('hyp',  str(ROOT / 'config/hyp.scratch.yaml'), 'hyperparameters path')
 #flags.DEFINE_string('hyp', 'data/hyps/hyp.finetune.yaml', 'hyperparameters path')
 
 # TRAIN
 flags.DEFINE_string('resume', None, 'resume most recent training, weights')  ###
 #flags.DEFINE_string('resume', '/media/mohsen/myDrive/runs/ObjectBox/COCO_10/weights/last.pt', 'resume most recent training, weights')  ###
-flags.DEFINE_string('name', 'COCO_ECCV_rebutt1', 'coco128_, renames experiment folder exp{N} to exp{N}_{name} if supplied')
+flags.DEFINE_string('name', 'voc_temp', 'renames experiment folder exp{N} to exp{N}_{name} if supplied')
 flags.DEFINE_integer('epochs', 1000, 'epochs_300')  ###
 flags.DEFINE_integer('batch_size', 24, '16, total batch size for all GPUs')  ###
 flags.DEFINE_string('device', '0', 'cuda device, i.e. 0 or 0,1,2,3 or cpu')  ###
@@ -49,7 +49,6 @@ flags.DEFINE_bool('rect', False, "rectangular training")
 flags.DEFINE_bool('nosave', False, "only save final checkpoint")
 flags.DEFINE_bool('noval', False, "only test final epoch")
 flags.DEFINE_bool('noautoanchor', True, "disable autoanchor check")
-flags.DEFINE_bool('evolve', False, "evolve hyperparameters")
 flags.DEFINE_string('bucket', '', 'gsutil bucket')
 flags.DEFINE_bool('cache_images', False, 'cache images for faster training')
 flags.DEFINE_bool('image_weights', False, 'use weighted image selection for training')

@@ -1,0 +1,24 @@
+# PASCAL VOC dataset http://host.robots.ox.ac.uk/pascal/VOC
+
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: /media/mohsen/4657c4a8-4bc0-4064-b57a-f16a4f13ef3e/VOC
+
+train: # train images (relative to 'path')  16551 images
+  - images/train2012
+  - images/train2007
+  - images/val2012
+  - images/val2007
+
+val: # val images (relative to 'path')  4952 images
+  #- /media/mohsen/4657c4a8-4bc0-4064-b57a-f16a4f13ef3e/PASCAL-VOC-2012/VOCtrainval_11-May-2012/VOCdevkit/VOC2012/val_processed.txt  #  VAL, 5823 images
+  - images/test2007
+  
+test: # test images (optional)
+  - /media/mohsen/4657c4a8-4bc0-4064-b57a-f16a4f13ef3e/PASCAL-VOC-2012/VOC2012test/VOCdevkit/VOC2012/test_processed.txt  #  TEST, 10991 images
+
+
+# Classes
+nc: 20  # number of classes
+names: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog',
+        'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']  # class names
