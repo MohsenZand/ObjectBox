@@ -255,6 +255,3 @@ class FocalLoss(nn.Module):
             return loss.sum()
         else:  # 'none'
             return loss
-
-
-

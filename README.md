@@ -45,6 +45,5 @@ Please cite our paper if you use code from this repository:
 ```
 
 ## Reference
-A part of the codes is based on 
-[YOLO](https://github.com/ultralytics/yolov5)
+Many utility codes are borrowed from [YOLO](https://github.com/ultralytics/yolov5).
 
