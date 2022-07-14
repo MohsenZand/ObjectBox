@@ -30,7 +30,7 @@ flags.DEFINE_string('hyp',  str(ROOT / 'config/hyp.scratch.yaml'), 'hyperparamet
 
 # TRAIN
 flags.DEFINE_string('resume', None, 'resume most recent training, weights')  
-flags.DEFINE_string('name', 'voc_temp', 'renames experiment folder exp{N} to exp{N}_{name} if supplied')
+flags.DEFINE_string('name', 'voc', 'renames experiment folder exp{N} to exp{N}_{name} if supplied')
 flags.DEFINE_integer('epochs', 1000, 'epochs_300')  
 flags.DEFINE_integer('batch_size', 24, '16, total batch size for all GPUs')  
 flags.DEFINE_string('device', '0', 'cuda device, i.e. 0 or 0,1,2,3 or cpu')  
