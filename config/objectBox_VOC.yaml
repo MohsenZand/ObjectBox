@@ -9,7 +9,6 @@ det_layers:
   - [8,8, 16,16, 32,32, 64,64, 128,128]  # P4/16
   - [8,8, 16,16, 32,32, 64,64, 128,128]  # P5/32
 
-
 # ObjectBox backbone
 backbone:
   # [from, number, module, args]

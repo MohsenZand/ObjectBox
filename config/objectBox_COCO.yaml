@@ -25,7 +25,6 @@ backbone:
    [-1, 1, SPPF, [1024, 5]],  # 9
   ]
 
-
 # ObjectBox head
 head:
   [[-1, 1, Conv, [512, 1, 1]],
