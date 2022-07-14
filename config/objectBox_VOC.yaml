@@ -3,8 +3,8 @@ nc: 20  # number of classes
 depth_multiple: 1.33  # model depth multiple
 width_multiple: 1.25  # layer channel multiple
 
-# anchors
-anchors:
+# det_layers
+det_layers:
   - [8,8, 16,16, 32,32, 64,64, 128,128]  # P3/8
   - [8,8, 16,16, 32,32, 64,64, 128,128]  # P4/16
   - [8,8, 16,16, 32,32, 64,64, 128,128]  # P5/32
@@ -46,5 +46,5 @@ head:
    [[-1, 10], 1, Concat, [1]],  # cat head P5
    [-1, 3, C3, [1024, False]],  # 23 (P5/32-large)
 
-   [[17, 20, 23], 1, Detect, [nc, anchors]],  # Detect(P3, P4, P5)
+   [[17, 20, 23], 1, Detect, [nc, det_layers]],  # Detect(P3, P4, P5)
   ]

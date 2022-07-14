@@ -28,7 +28,7 @@ class ComputeLoss:
         self.balance = {3: [4.0, 1.0, 0.4]}.get(det.nl, [4.0, 1.0, 0.25, 0.06, .02])  # P3-P7
         self.ssi = list(det.stride).index(16) if autobalance else 0  # stride 16 index
         self.BCEcls, self.BCEobj, self.gr, self.hyp, self.autobalance = BCEcls, BCEobj, 1.0, h, autobalance
-        for k in 'na', 'nc', 'nl', 'anchors':
+        for k in 'na', 'nc', 'nl', 'det_layers':
             setattr(self, k, getattr(det, k))
 
 
@@ -36,22 +36,22 @@ class ComputeLoss:
         device = targets.device
         lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device) 
         
-        tcls_center, indices_center, tbox_center = self.build_targets_noanch(p, targets)  # targets
+        tcls_center, indices_center, tbox_center = self.build_targets(p, targets)  # targets
 
         # Losses
         for i, pi in enumerate(p):  # layer index, layer predictions
             
             tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
         
-            b_1, a_1, gj_1, gi_1 = indices_center[i]  # image, anchor, gridy, gridx
+            b_1, a_1, gj_1, gi_1 = indices_center[i]  # image, 0, gridy, gridx
             n = b_1.shape[0]  # number of targets
 
             if n:
                 ps_center = pi[b_1, a_1, gj_1, gi_1]  # prediction subset corresponding to targets
                 # Regression
-                anchors = torch.tensor([2**i,2**i], device=pi.device).repeat((n,2))
-                pbox = (ps_center[:, :4].sigmoid() * 2) ** 2 * anchors
-                iou_center = bbox_iou_all(pbox.T, tbox_center[i], x1y1x2y2=True, PIoU=True)  # iou(prediction, target)
+                s_gain = torch.tensor([2**i,2**i], device=pi.device).repeat((n,2))
+                pbox = (ps_center[:, :4].sigmoid() * 2) ** 2 * s_gain
+                iou_center = sd_iou(pbox.T, tbox_center[i], x1y1x2y2=True, PIoU=True)  # iou(prediction, target)
                 lbox += (1.0 - iou_center).mean()  # iou loss
 
                 # Objectness
@@ -68,10 +68,6 @@ class ComputeLoss:
                     t[range(n), tcls_center[i]] = self.cp
                     lcls += self.BCEcls(ps_center[:, 5:], t)  # BCE
                     
-                # Append targets to text file
-                # with open('targets.txt', 'a') as file:
-                #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
-
             obji = self.BCEobj(pi[..., 4], tobj)
             lobj += obji * self.balance[i]  # obj los
             
@@ -88,19 +84,19 @@ class ComputeLoss:
         return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
 
 
-    def build_targets_noanch(self, p, targets):
+    def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         num_nobox = 1
         num_nobox = 1
 
-        nt = targets.shape[0]  # number of anchors, targets
+        nt = targets.shape[0]  # 
         tcls_center, indices_center, tbox_center = [], [], []
         
         gain_i = torch.ones(6, device=targets.device)  # normalized to gridspace gain
         
         gain = torch.ones(7, device=targets.device)  # normalized to gridspace gain
         ai = torch.arange(num_nobox, device=targets.device).float().view(num_nobox, 1).repeat(1, nt)  # same as .repeat_interleave(nt)
-        targets_b = torch.cat((targets.repeat(num_nobox, 1, 1), ai[:, :, None]), 2)  # append anchor indices
+        targets_b = torch.cat((targets.repeat(num_nobox, 1, 1), ai[:, :, None]), 2)  # 
 
         g = 0.5
         off = torch.tensor([[0, 0],
@@ -128,22 +124,15 @@ class ComputeLoss:
             ymax_grid = torch.clamp(ymax.long(), min=0, max=nG0 - 1)
                 
             allwidth = (ymax_grid - ymin_grid) + 1
-            allheight = (xmax_grid - xmin_grid) + 1
 
-            '''a = torch.zeros((num_nobox, nt), dtype=int, device=targets.device)
-            for ii in range(num_nobox):
-                a[ii, :] = ii'''
-
-            th1, th2 = 0, 0
+            th1 = 0
             obj_i = (allwidth >= th1)
 
-            #targets_b[:, :, 6] = a
             gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
             t = targets_b * gain
 
             xyxy = (torch.stack((xmin, ymin, xmax, ymax)).T)
             xyxy = xyxy[None, :].repeat((1,1,1))
-            #xyxy = xyxy[None, :].repeat((num_nobox,1,1))
             t = torch.cat((t, xyxy), 2)
 
             mask = torch.zeros(t.shape[1], dtype=torch.bool)
@@ -164,9 +153,6 @@ class ComputeLoss:
             ####
             gxy = t1[:, 2:4]  # grid xy
             gij = (gxy - offsets).long()
-            gij_a = torch.unique(gij, dim=1)
-            if gij_a.shape[0] != gij.shape[0]:
-                print('!!! OVERLAP ...', gij.shape[0] - gij_a.shape[0])
 
             gxy_a = (gxy - offsets)
             j, k = ((gxy_a % 1. < g) & (gxy_a > 1.)).T
@@ -198,16 +184,15 @@ class ComputeLoss:
             dy2 = ((gij_ymax - (gij[:,1]))) # / nG0)
             
             # Append
-            l = 0 #t1[:, 6].long()  # anchor indices
+            l = 0 
             indices_center.append((b, l, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))
             tbox_center.append(torch.stack((dx1, dy1, dx2, dy2)).T)  # box
             tcls_center.append(c)  # class
 
-
         return tcls_center, indices_center, tbox_center
 
 
-def bbox_iou_all(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, PIoU=False, eps=1e-9):
+def sd_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, PIoU=False, eps=1e-9):
     # Returns the IoU of box1 to box2. box1 is 4xn, box2 is nx4
     box2 = box2.T
 
@@ -226,18 +211,13 @@ def bbox_iou_all(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, 
     inter_x1, inter_y1 = torch.min(b1_x1, b2_x1), torch.min(b1_y1, b2_y1)
     inter_x2, inter_y2 = torch.min(b1_x2, b2_x2), torch.min(b1_y2, b2_y2)
     I = (inter_x1 + inter_x2 - 1) ** 2 + (inter_y1 + inter_y2 - 1) ** 2
-    #inter = (torch.min(b1_x1, b2_x1) + torch.min(b1_x2, b2_x2)).clamp(0) * (torch.min(b1_y1, b2_y1) + torch.min(b1_y2, b2_y2)).clamp(0)
-    '''for bi in range(inter.shape[0]):
-        if inter[bi] == 0:
-            I[bi] = -I[bi]'''
+
     cw = torch.max(b1_x1, b2_x1) + torch.max(b1_x2, b2_x2) - 1  # convex (smallest enclosing box) width
     ch = torch.max(b1_y1, b2_y1) + torch.max(b1_y2, b2_y2) - 1  # convex height
     C = cw ** 2 + ch ** 2 + eps 
-    #iou = 1 - (V - I) / S
-    ###
-    rho = 1 #0.1 #1.1 (exp15) #1 (exp14) #0.1 (exp 12)
+
+    rho = 1 
     iou = (I - (rho*S)) / C
-    ###
 
     return iou
     

@@ -22,17 +22,17 @@ class Detect(nn.Module):
     stride = None  # strides computed during build
     onnx_dynamic = False  # ONNX export parameter
 
-    def __init__(self, nc=80, anchors=(), ch=(), inplace=True):  # detection layer
+    def __init__(self, nc=80, det_layers=(), ch=(), inplace=True):  # detection layer
         super().__init__()
         self.nc = nc  # number of classes
-        self.no = nc + 5  # number of outputs per anchor
-        self.nl = len(anchors)  # number of detection layers
+        self.no = nc + 5  # number of outputs per detection layers
+        self.nl = len(det_layers)  # number of detection layers
         self.na = 1
 
         self.grid = [torch.zeros(1)] * self.nl  # init grid
-        a = torch.tensor(anchors).float().view(self.nl, -1, 2)[:, :self.na, :]
-        self.register_buffer('anchors', a)  # shape(nl,na,2)
-        self.register_buffer('anchor_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
+        a = torch.tensor(det_layers).float().view(self.nl, -1, 2)[:, :self.na, :]
+        self.register_buffer('det_layers', a)  # shape(nl,na,2)
+        self.register_buffer('det_layers_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
         self.inplace = inplace  # use in-place ops (e.g. slice assignment)
 
@@ -57,7 +57,7 @@ class Detect(nn.Module):
                 
                 power = 2 ** i
 
-                anch = torch.ones_like(self.anchor_grid[i, ..., 0]) * power
+                anch = torch.ones_like(self.det_layers_grid[i, ..., 0]) * power
                 dx1 = (y[..., 0] * 2) ** 2 * anch
                 dy1 = (y[..., 1] * 2) ** 2 * anch
                 dx2 = (y[..., 2] * 2) ** 2 * anch
@@ -107,14 +107,14 @@ class Model(nn.Module):
 
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
-        # Build strides, anchors
+        # Build strides, det_layers
         m = self.model[-1]  # Detect()
         if isinstance(m, Detect):
             s = 256  # 2x min stride 128
             m.inplace = self.inplace
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            m.anchors /= m.stride.view(-1, 1, 1)
-            ###### check_anchor_order(m)
+            m.det_layers /= m.stride.view(-1, 1, 1)
+            ###### check_det_layers_order(m)
             self.stride = m.stride
             self._initialize_biases()  # only run once
             # print('Strides: %s' % m.stride.tolist())
@@ -236,12 +236,9 @@ def scale_img(img, ratio=1.0, same_shape=False, gs=32):  # img(16,3,256,416)
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
     logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
-    anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
-    na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
-    no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
-    ###
-    no = na * (nc + 6)  # number of outputs = anchors * (classes + 6)
-    ###
+    det_layers, nc, gd, gw = d['det_layers'], d['nc'], d['depth_multiple'], d['width_multiple']
+    na = (len(det_layers[0]) // 2) if isinstance(det_layers, list) else det_layers  # number of det_layers
+    no = na * (nc + 6)  # number of outputs = det_layers * (classes + 6)
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
@@ -269,7 +266,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = sum([ch[x] for x in f])
         elif m is Detect:
             args.append([ch[x] for x in f])
-            if isinstance(args[1], int):  # number of anchors
+            if isinstance(args[1], int):  # 
                 args[1] = [list(range(args[1] * 2))] * len(f)
         #elif m is Contract:
         #    c2 = ch[f] * args[0] ** 2
