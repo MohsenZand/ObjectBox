@@ -20,7 +20,7 @@ elif exp == 'pascal':
     flags.DEFINE_string('exp', 'pascal', 'coco or pascal')  
 
 # GENERAL
-flags.DEFINE_string('project', <PATH>, 'save to project/name')  
+flags.DEFINE_string('project', '<PATH>', 'save to project/name')  
 flags.DEFINE_bool('exist_ok', True, 'existing project/name ok, do not increment')
 flags.DEFINE_bool('visualize', False, 'visualize the features')
 flags.DEFINE_bool('WANDB', False, 'wandb?')
