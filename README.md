@@ -40,7 +40,11 @@ Natural Sciences and Engineering Research Council of Canada (NSERC)
 ## Citation
 Please cite our paper if you use code from this repository:
 ```
-@article{
+@article{zand2022objectbox,
+  title={ObjectBox: From Centers to Boxes for Anchor-Free Object Detection},
+  author={Zand, Mohsen and Etemad, Ali and Greenspan, Michael},
+  journal={arXiv preprint arXiv:2207.06985},
+  year={2022}
 }
 ```
 
