@@ -1,4 +1,4 @@
-# Hyperparameters for COCO training from scratch
+# Hyperparameters
 
 lr0: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
 lrf: 0.2  # final OneCycleLR learning rate (lr0 * lrf)

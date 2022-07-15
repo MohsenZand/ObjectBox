@@ -9,7 +9,7 @@ Python 3.8.8 version is used for development.
 
 
 ## Preparation
-Set the 'PATH' in '/data/coco.yaml'  and 'VOC.yaml'\
+Set the 'PATH' in '/data/coco.yaml'  and '/data/VOC.yaml'\
 Set the 'project' flag in flag_sets.py
 
 
