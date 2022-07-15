@@ -5,6 +5,7 @@ ROOT = FILE.parents[0]  # ObjectBox root directory
 
 FLAGS = flags.FLAGS
 
+# Note: set (exp = 'pascal') or (exp = 'coco')
 exp = 'pascal'
 
 if exp == 'coco':
