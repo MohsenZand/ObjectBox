@@ -57,11 +57,11 @@ class Detect(nn.Module):
                 
                 power = 2 ** i
 
-                anch = torch.ones_like(self.det_layers_grid[i, ..., 0]) * power
-                dx1 = (y[..., 0] * 2) ** 2 * anch
-                dy1 = (y[..., 1] * 2) ** 2 * anch
-                dx2 = (y[..., 2] * 2) ** 2 * anch
-                dy2 = (y[..., 3] * 2) ** 2 * anch
+                s_gain = torch.ones_like(self.det_layers_grid[i, ..., 0]) * power
+                dx1 = (y[..., 0] * 2) ** 2 * s_gain
+                dy1 = (y[..., 1] * 2) ** 2 * s_gain
+                dx2 = (y[..., 2] * 2) ** 2 * s_gain
+                dy2 = (y[..., 3] * 2) ** 2 * s_gain
                 
                 y[..., 0] = (x_coord.view(bs, self.na, ny, nx)+1 - (dx1)) * self.stride[i]
                 y[..., 1] = (y_coord.view(bs, self.na, ny, nx)+1 - (dy1)) * self.stride[i]
