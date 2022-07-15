@@ -1,5 +1,5 @@
 # ObjectBox: From Centers to Boxes for Anchor-Free Object Detection
-[ECCV 2022 (Oral Presentation)](https://arxiv.org/abs/)
+[ECCV 2022 (Oral Presentation)](https://arxiv.org/abs/arXiv:2207.06985)
 
 ## Dependencies
 * [PyTorch](https://pytorch.org)
