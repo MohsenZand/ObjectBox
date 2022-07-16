@@ -86,8 +86,7 @@ class ComputeLoss:
 
     def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
-        num_nobox = 1
-        num_nobox = 1
+        num_nobox = 1  # used in ablation
 
         nt = targets.shape[0]  # 
         tcls_center, indices_center, tbox_center = [], [], []
@@ -125,7 +124,7 @@ class ComputeLoss:
                 
             allwidth = (ymax_grid - ymin_grid) + 1
 
-            th1 = 0
+            th1 = 0 # used in ablation
             obj_i = (allwidth >= th1)
 
             gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
@@ -216,7 +215,7 @@ def sd_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, PIoU=F
     ch = torch.max(b1_y1, b2_y1) + torch.max(b1_y2, b2_y2) - 1  # convex height
     C = cw ** 2 + ch ** 2 + eps 
 
-    rho = 1 
+    rho = 1  # used in development, can be removed
     iou = (I - (rho*S)) / C
 
     return iou
