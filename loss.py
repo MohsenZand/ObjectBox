@@ -117,6 +117,7 @@ class ComputeLoss:
             t_boxes_xyxy = xywh2xyxy(t_boxes)
             xmin, ymin, xmax, ymax = t_boxes_xyxy[:, 0], t_boxes_xyxy[:, 1], t_boxes_xyxy[:, 2], t_boxes_xyxy[:, 3]
 
+            # used in ablation
             xmin_grid = torch.clamp(xmin.long(), min=0, max=nG1 - 1)
             ymin_grid = torch.clamp(ymin.long(), min=0, max=nG0 - 1) 
             xmax_grid = torch.clamp(xmax.long(), min=0, max=nG1 - 1)
