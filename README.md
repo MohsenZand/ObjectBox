@@ -43,8 +43,10 @@ Please cite our papers if you use code from this repository:
 @article{zand2022objectbox,
   title={ObjectBox: From Centers to Boxes for Anchor-Free Object Detection},
   author={Zand, Mohsen and Etemad, Ali and Greenspan, Michael},
-  journal={arXiv preprint arXiv:2207.06985},
-  year={2022}
+  booktitle={European conference on computer vision},
+  pages={1--23},
+  year={2022},
+  organization={Springer}
 }
 ```
 
