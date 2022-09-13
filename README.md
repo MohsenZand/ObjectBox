@@ -31,6 +31,16 @@ Set 'task' flag in flag_sets.py as: 'test'
 
 Run val.py
 
+### Pretrained Checkpoints
+
+Trained model on COCO can be found [here](https://queensuca-my.sharepoint.com/:u:/g/personal/mz33_queensu_ca/EfvA5ymDzKVDkYyHJL_FVqEBvGF9Ic15nrUzBvIEJp_p9Q?e=uHdTbg).
+
+| AP<sub>0.5:0.95</sub> | AP<sub>0.5</sub> | AP<sub>0.75</sub> | AP<sub>S</sub> | AP<sub>M</sub> | AP<sub>L</sub> | AR<sub>1</sub> | AR<sub>10</sub> | AR<sub>100</sub> | AR<sub>S</sub> | AR<sub>M</sub> | AR<sub>L</sub> |
+|-----------------------|------------------|-------------------|----------------|----------------|----------------|----------------|-----------------|------------------|----------------|----------------|----------------|
+| 46.8                  | 66.4             | 50.4              |28.7            |51.8            |61.1            |36.9            |58.8             |63.0              |44.5            |68.0            |78.6            |
+
+
+
 
 ## Acknowledgements
 This project is supported by Geotab Inc., the City of Kingston, and the

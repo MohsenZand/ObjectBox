@@ -6,7 +6,7 @@ ROOT = FILE.parents[0]  # ObjectBox root directory
 FLAGS = flags.FLAGS
 
 # Note: set (exp = 'pascal') or (exp = 'coco')
-exp = 'pascal'
+exp = 'coco'
 
 if exp == 'coco':
     # GENERAL
@@ -25,7 +25,7 @@ else:
 
 # GENERAL
 flags.DEFINE_string('project', '<PATH>', 'save to project/name')  
-flags.DEFINE_bool('exist_ok', True, 'existing project/name ok, do not increment')
+flags.DEFINE_bool('exist_ok', False, 'existing project/name ok, do not increment')
 flags.DEFINE_bool('visualize', False, 'visualize the features')
 flags.DEFINE_bool('WANDB', False, 'wandb?')
 
@@ -34,16 +34,16 @@ flags.DEFINE_string('hyp',  str(ROOT / 'config/hyp.yaml'), 'hyperparameters path
 
 # TRAIN
 flags.DEFINE_string('resume', None, 'resume most recent training, weights')  
-flags.DEFINE_string('name', 'voc', 'renames experiment folder exp{N} to exp{N}_{name} if supplied')
+flags.DEFINE_string('name', exp, 'renames experiment folder exp{N} to exp{N}_{name} if supplied')
 flags.DEFINE_integer('epochs', 1000, 'max number of epochs')  
 flags.DEFINE_integer('batch_size', 24, 'total batch size for all GPUs')  
 flags.DEFINE_string('device', '0', 'cuda device, i.e. 0 or 0,1,2,3 or cpu')  
 flags.DEFINE_integer('imgsz', 640, 'image sizes, [640, 640]')
 
 flags.DEFINE_float('conf_thres', 0.0001, 'object confidence threshold') 
-flags.DEFINE_float('iou_thres', 0.5, 'IoU threshold for NMS')  
-flags.DEFINE_integer('workers', 2, 'maximum number of dataloader workers')
-flags.DEFINE_string('task','train', 'train, val, test')
+flags.DEFINE_float('iou_thres', 0.55, 'IoU threshold for NMS')  
+flags.DEFINE_integer('workers', 8, 'maximum number of dataloader workers')
+flags.DEFINE_string('task','val', 'train, val, test')
 
 flags.DEFINE_bool('rect', False, "rectangular training")
 flags.DEFINE_bool('nosave', False, "only save final checkpoint")

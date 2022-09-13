@@ -57,6 +57,7 @@ class Detect(nn.Module):
                 
                 power = 2 ** i
 
+                ### self.det_layers_grid = self.anchor_grid   
                 s_gain = torch.ones_like(self.det_layers_grid[i, ..., 0]) * power
                 dx1 = (y[..., 0] * 2) ** 2 * s_gain
                 dy1 = (y[..., 1] * 2) ** 2 * s_gain
@@ -268,10 +269,6 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # 
                 args[1] = [list(range(args[1] * 2))] * len(f)
-        #elif m is Contract:
-        #    c2 = ch[f] * args[0] ** 2
-        #elif m is Expand:
-        #    c2 = ch[f] // args[0] ** 2
         else:
             c2 = ch[f]
 
@@ -387,7 +384,7 @@ class Bottleneck(nn.Module):
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
 class SPPF(nn.Module):
-    # Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher
+    # Spatial Pyramid Pooling - Fast (SPPF) layer by Glenn Jocher
     def __init__(self, c1, c2, k=5):  # equivalent to SPP(k=(5, 9, 13))
         super().__init__()
         c_ = c1 // 2  # hidden channels

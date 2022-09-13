@@ -8,6 +8,7 @@ from threading import Thread
 import numpy as np
 import torch
 from tqdm import tqdm
+from model import Detect
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # ObjectBox root directory
@@ -166,17 +167,6 @@ def run(data,
         nb, _, height, width = img.shape  # batch size, channels, height, width
         t2 = time_sync()
         dt[0] += t2 - t1
-
-        #####
-        import cv2
-        import matplotlib
-        matplotlib.use('TkAgg')
-        import matplotlib.pyplot as plt 
-        imtest = img[0].permute(1, 2, 0)
-        imtest = cv2.normalize(np.float32(imtest.cpu()), None, alpha = 0, beta = 255, norm_type = cv2.NORM_MINMAX, dtype = cv2.CV_32F)
-        imtest = imtest.astype(np.uint8)
-        plt.subplot(3,5,1).imshow(imtest)
-        #####
 
         # Run model
         out, train_out = model(img, augment=augment)  # inference and training outputs

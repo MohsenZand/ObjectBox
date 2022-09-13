@@ -14,8 +14,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from utils import xywh2xyxy, xyxy2xywh
 
-
+FILE = Path(__file__).resolve()
+ROOT = FILE.parents[0]  # ObjectBox root directory
 RANK = int(os.getenv('RANK', -1))
+matplotlib.rc('font', **{'size': 11})
+matplotlib.use('Agg')  # for writing to files only
 
 
 def feature_visualization(x, module_type, stage, n=32, save_dir=Path('runs/detect/exp')):
@@ -75,9 +78,7 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
 
     # Annotate
     fs = int((h + w) * ns * 0.005) # font size
-    #fs = int((h + w) * ns * 0.01)  # font size
     annotator = Annotator(mosaic, line_width=round(fs/5), font_size=fs, pil=True)
-    #annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True)
     for i in range(i + 1):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=2)  # borders
@@ -111,7 +112,14 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
 def check_font(font='Arial.ttf', size=10):
     # Return a PIL TrueType Font, downloading to CONFIG_DIR if necessary
     font = Path(font)
-    return ImageFont.truetype(str(font) if font.exists() else font.name, size)
+    font = font if font.exists() else (ROOT/'config'/ font.name)
+    try:
+        return ImageFont.truetype(str(font) if font.exists() else font.name, size)
+    except Exception as e:  # download if missing
+        url = "https://ultralytics.com/assets/" + font.name
+        print(f'Downloading {url} to {font}...')
+        torch.hub.download_url_to_file(url, str(font), progress=False)
+        return ImageFont.truetype(str(font), size)
     
 
 class Annotator:

@@ -1,6 +1,9 @@
 import imp
 import warnings
 from threading import Thread
+from pathlib import Path
+import yaml
+from tqdm import tqdm
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -211,7 +214,7 @@ class WandbLogger():
             else:
                 self.wandb_run = wandb.init(config=opt,
                                         resume="allow",
-                                        project='YOLOv5' if opt.project == 'runs/train' else Path(opt.project).stem,
+                                        project='ObjectBox' if opt.project == 'runs/train' else Path(opt.project).stem,
                                         entity=opt.entity,
                                         name=opt.name if opt.name != 'exp' else None,
                                         job_type=job_type,
@@ -221,7 +224,7 @@ class WandbLogger():
         elif self.wandb:
             self.wandb_run = wandb.init(config=opt,
                                         resume="allow",
-                                        project='YOLOv5' if opt.project == 'runs/train' else Path(opt.project).stem,
+                                        project='ObjectBox' if opt.project == 'runs/train' else Path(opt.project).stem,
                                         entity=opt.entity,
                                         name=opt.name if opt.name != 'exp' else None,
                                         job_type=job_type,
@@ -262,7 +265,7 @@ class WandbLogger():
         assert wandb, 'Install wandb to upload dataset'
         config_path = self.log_dataset_artifact(opt.data,
                                                 opt.single_cls,
-                                                'YOLOv5' if opt.project == 'runs/train' else Path(opt.project).stem)
+                                                'ObjectBox' if opt.project == 'runs/train' else Path(opt.project).stem)
         print("Created dataset config file ", config_path)
         with open(config_path, errors='ignore') as f:
             wandb_data_dict = yaml.safe_load(f)
@@ -270,7 +273,7 @@ class WandbLogger():
 
     def setup_training(self, opt):
         """
-        Setup the necessary processes for training YOLO models:
+        Setup the necessary processes for training ObjectBox models:
           - Attempt to download model checkpoint and dataset artifacts if opt.resume stats with WANDB_ARTIFACT_PREFIX
           - Update data_dict, to contain info of previous run if resumed and the paths of dataset artifact if downloaded
           - Setup log_dict, initialize bbox_interval 

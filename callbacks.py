@@ -4,7 +4,7 @@
 
 class Callbacks:
     """"
-    Handles all registered callbacks for YOLOv5 Hooks
+    Handles all registered callbacks for ObjectBox Hooks
     """
 
     # Define the available callbacks
@@ -61,8 +61,8 @@ class Callbacks:
         Loop through the registered actions and fire all callbacks
         Args:
             hook The name of the hook to check, defaults to all
-            args Arguments to receive from YOLOv5
-            kwargs Keyword Arguments to receive from YOLOv5
+            args Arguments to receive from ObjectBox
+            kwargs Keyword Arguments to receive from ObjectBox
         """
 
         assert hook in self._callbacks, f"hook '{hook}' not found in callbacks {self._callbacks}"

@@ -104,10 +104,6 @@ def train(hyp, device, callbacks):
     check_suffix(weights, '.pt')  # check weights
     pretrained = weights.endswith('.pt')
     if pretrained:
-        ''' NA for yolov5
-        with torch_distributed_zero_first(rank):
-            attempt_download(weights)  # download if not found locally
-        '''
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(cfg or ckpt['model'].yaml, ch=3, nc=nc).to(device)  # create
         exclude = ['det_layers'] if (cfg or hyp.get('det_layers')) and not resume else []  # exclude keys
@@ -170,19 +166,12 @@ def train(hyp, device, callbacks):
     if pretrained:
         # Optimizer
         if ckpt['optimizer'] is not None:
-            #####optimizer.load_state_dict(ckpt['optimizer'])
+            optimizer.load_state_dict(ckpt['optimizer'])
             best_fitness = ckpt['best_fitness']
 
         # EMA
         if ema and ckpt.get('ema'):
-            #####ema.ema.load_state_dict(ckpt['ema'].float().state_dict())
-            
-            #####
-            for i in range(len(ema.ema.state_dict().items())):
-                if i < 786:
-                    list(ema.ema.state_dict().items())[i][1].data = list(ckpt['ema'].float().state_dict().items())[i][1].data
-            #####
-
+            ema.ema.load_state_dict(ckpt['ema'].float().state_dict())
             ema.updates = ckpt['updates']
 
         # Results
