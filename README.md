@@ -33,13 +33,21 @@ Run val.py
 
 ### Pretrained Checkpoints
 
-Trained model on COCO can be found [here](https://queensuca-my.sharepoint.com/:u:/g/personal/mz33_queensu_ca/EfvA5ymDzKVDkYyHJL_FVqEBvGF9Ic15nrUzBvIEJp_p9Q?e=uHdTbg).
+* Trained model on COCO can be found [here](https://queensuca-my.sharepoint.com/:u:/g/personal/mz33_queensu_ca/EfvA5ymDzKVDkYyHJL_FVqEBvGF9Ic15nrUzBvIEJp_p9Q?e=uHdTbg).
 
 | AP<sub>0.5:0.95</sub> | AP<sub>0.5</sub> | AP<sub>0.75</sub> | AP<sub>S</sub> | AP<sub>M</sub> | AP<sub>L</sub> | AR<sub>1</sub> | AR<sub>10</sub> | AR<sub>100</sub> | AR<sub>S</sub> | AR<sub>M</sub> | AR<sub>L</sub> |
 |-----------------------|------------------|-------------------|----------------|----------------|----------------|----------------|-----------------|------------------|----------------|----------------|----------------|
 | 46.8                  | 66.4             | 50.4              |28.7            |51.8            |61.1            |36.9            |58.8             |63.0              |44.5            |68.0            |78.6            |
 
 
+* Trained model on PASCAL VOC 2012 can be found [here](https://queensuca-my.sharepoint.com/:u:/g/personal/mz33_queensu_ca/EQIKyhByOWFEndRPkSStmboBYxXL3M8vwVsGbJ0N8Uba4w?e=ttpl8k).
+
+| mAP | plane | bicycle | bird | boat | bottle | bus | car | cat | chair | cow | table | dog | horse | bike | person | plant | sheep | sofa | train |  tv |
+|-----|-------|---------|------|------|--------|-----|-----|-----|-------|-----|-------|-----|-------|------|--------|-------|-------|------|-------|-----|
+| 85.4|  92.5 |   92.8  | 84.1 | 76.1 |  75.7  | 91.0| 93.4| 92.3|  67.8 | 89.4|  78.9 | 91.7|  93.6 | 91.9 |  88.7  |  60.1 |  87.7 | 82.0 |  91.3 | 86.4|
+
+The given results are on validation set. 
+Please set 'iou_thres = 0.45'. 
 
 
 ## Acknowledgements
