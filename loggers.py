@@ -8,7 +8,7 @@ from tqdm import tqdm
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from utils import colorstr, emojis, de_parallel
-from plots import plot_images
+from plots import plot_images, plot_results
 
 LOGGERS = ('csv', 'tb', 'wandb')  # text-file, TensorBoard, Weights & Biases
 
