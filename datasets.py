@@ -1,5 +1,6 @@
 import glob
 import os
+import time
 import hashlib
 import random
 import cv2
@@ -7,8 +8,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from utils import torch_distributed_zero_first, xywhn2xyxy, xyxy2xywhn, xyn2xy, segments2boxes
+from utils import torch_distributed_zero_first, xywhn2xyxy, xyxy2xywhn, xyn2xy, segments2boxes, clean_str
 from augmentations import Albumentations, copy_paste, mixup, letterbox, random_perspective, augment_hsv, copy_paste
+from threading import Thread
 from pathlib import Path
 from tqdm import tqdm
 import logging
@@ -18,6 +20,7 @@ from PIL import Image, ExifTags
 
 
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
+VID_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 NUM_THREADS = min(8, os.cpu_count())  # number of multiprocessing threads
 
 
@@ -387,6 +390,234 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         return torch.stack(img4, 0), torch.cat(label4, 0), path4, shapes4
 
+
+
+class LoadImages:
+    # ObjectBox image/video dataloader, i.e. `python detect.py`
+    def __init__(self, path, img_size=640, stride=32, auto=True, transforms=None, vid_stride=1):
+        files = []
+        for p in sorted(path) if isinstance(path, (list, tuple)) else [path]:
+            p = str(Path(p).resolve())
+            if '*' in p:
+                files.extend(sorted(glob.glob(p, recursive=True)))  # glob
+            elif os.path.isdir(p):
+                files.extend(sorted(glob.glob(os.path.join(p, '*.*'))))  # dir
+            elif os.path.isfile(p):
+                files.append(p)  # files
+            else:
+                raise FileNotFoundError(f'{p} does not exist')
+
+        images = [x for x in files if x.split('.')[-1].lower() in IMG_FORMATS]
+        videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
+        ni, nv = len(images), len(videos)
+
+        self.img_size = img_size
+        self.stride = stride
+        self.files = images + videos
+        self.nf = ni + nv  # number of files
+        self.video_flag = [False] * ni + [True] * nv
+        self.mode = 'image'
+        self.auto = auto
+        self.transforms = transforms  # optional
+        self.vid_stride = vid_stride  # video frame-rate stride
+        if any(videos):
+            self._new_video(videos[0])  # new video
+        else:
+            self.cap = None
+        assert self.nf > 0, f'No images or videos found in {p}. ' \
+                            f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
+
+    def __iter__(self):
+        self.count = 0
+        return self
+
+    def __next__(self):
+        if self.count == self.nf:
+            raise StopIteration
+        path = self.files[self.count]
+
+        if self.video_flag[self.count]:
+            # Read video
+            self.mode = 'video'
+            for _ in range(self.vid_stride):
+                self.cap.grab()
+            ret_val, im0 = self.cap.retrieve()
+            while not ret_val:
+                self.count += 1
+                self.cap.release()
+                if self.count == self.nf:  # last video
+                    raise StopIteration
+                path = self.files[self.count]
+                self._new_video(path)
+                ret_val, im0 = self.cap.read()
+
+            self.frame += 1
+            # im0 = self._cv2_rotate(im0)  # for use if cv2 autorotation is False
+            s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames}) {path}: '
+
+        else:
+            # Read image
+            self.count += 1
+            im0 = cv2.imread(path)  # BGR
+            assert im0 is not None, f'Image Not Found {path}'
+            s = f'image {self.count}/{self.nf} {path}: '
+
+        if self.transforms:
+            im = self.transforms(im0)  # transforms
+        else:
+            im = letterbox(im0, self.img_size, stride=self.stride, auto=self.auto)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+
+        return path, im, im0, self.cap, s
+
+    def _new_video(self, path):
+        # Create a new video capture object
+        self.frame = 0
+        self.cap = cv2.VideoCapture(path)
+        self.frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.vid_stride)
+        self.orientation = int(self.cap.get(cv2.CAP_PROP_ORIENTATION_META))  # rotation degrees
+
+    def _cv2_rotate(self, im):
+        # Rotate a cv2 video manually
+        if self.orientation == 0:
+            return cv2.rotate(im, cv2.ROTATE_90_CLOCKWISE)
+        elif self.orientation == 180:
+            return cv2.rotate(im, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif self.orientation == 90:
+            return cv2.rotate(im, cv2.ROTATE_180)
+        return im
+
+    def __len__(self):
+        return self.nf  # number of files
+
+
+class LoadStreams:  # multiple IP or RTSP cameras
+    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True):
+        self.mode = 'stream'
+        self.img_size = img_size
+        self.stride = stride
+
+        if os.path.isfile(sources):
+            with open(sources, 'r') as f:
+                sources = [x.strip() for x in f.read().strip().splitlines() if len(x.strip())]
+        else:
+            sources = [sources]
+
+        n = len(sources)
+        self.imgs, self.fps, self.frames, self.threads = [None] * n, [0] * n, [0] * n, [None] * n
+        self.sources = [clean_str(x) for x in sources]  # clean source names for later
+        self.auto = auto
+        for i, s in enumerate(sources):  # index, source
+            # Start thread to read frames from video stream
+            print(f'{i + 1}/{n}: {s}... ', end='')
+            if 'youtube.com/' in s or 'youtu.be/' in s:  # if source is YouTube video
+                import pafy
+                s = pafy.new(s).getbest(preftype="mp4").url  # YouTube URL
+            s = eval(s) if s.isnumeric() else s  # i.e. s = '0' local webcam
+            cap = cv2.VideoCapture(s)
+            assert cap.isOpened(), f'Failed to open {s}'
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.fps[i] = max(cap.get(cv2.CAP_PROP_FPS) % 100, 0) or 30.0  # 30 FPS fallback
+            self.frames[i] = max(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), 0) or float('inf')  # infinite stream fallback
+
+            _, self.imgs[i] = cap.read()  # guarantee first frame
+            self.threads[i] = Thread(target=self.update, args=([i, cap]), daemon=True)
+            print(f" success ({self.frames[i]} frames {w}x{h} at {self.fps[i]:.2f} FPS)")
+            self.threads[i].start()
+        print('')  # newline
+
+        # check for common shapes
+        s = np.stack([letterbox(x, self.img_size, stride=self.stride, auto=self.auto)[0].shape for x in self.imgs])
+        self.rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
+        if not self.rect:
+            print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
+
+    def update(self, i, cap):
+        # Read stream `i` frames in daemon thread
+        n, f, read = 0, self.frames[i], 1  # frame number, frame array, inference every 'read' frame
+        while cap.isOpened() and n < f:
+            n += 1
+            # _, self.imgs[index] = cap.read()
+            cap.grab()
+            if n % read == 0:
+                success, im = cap.retrieve()
+                self.imgs[i] = im if success else self.imgs[i] * 0
+            time.sleep(1 / self.fps[i])  # wait time
+
+    def __iter__(self):
+        self.count = -1
+        return self
+
+    def __next__(self):
+        self.count += 1
+        if not all(x.is_alive() for x in self.threads) or cv2.waitKey(1) == ord('q'):  # q to quit
+            cv2.destroyAllWindows()
+            raise StopIteration
+
+        # Letterbox
+        img0 = self.imgs.copy()
+        img = [letterbox(x, self.img_size, stride=self.stride, auto=self.rect and self.auto)[0] for x in img0]
+
+        # Stack
+        img = np.stack(img, 0)
+
+        # Convert
+        img = img[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW
+        img = np.ascontiguousarray(img)
+
+        return self.sources, img, img0, None
+
+    def __len__(self):
+        return len(self.sources)  # 1E12 frames = 32 streams at 30 FPS for 30 years
+
+
+class LoadScreenshots:
+    def __init__(self, source, img_size=640, stride=32, auto=True, transforms=None):
+        # source = [screen_number left top width height] (pixels)
+        import mss
+
+        source, *params = source.split()
+        self.screen, left, top, width, height = 0, None, None, None, None  # default to full screen 0
+        if len(params) == 1:
+            self.screen = int(params[0])
+        elif len(params) == 4:
+            left, top, width, height = (int(x) for x in params)
+        elif len(params) == 5:
+            self.screen, left, top, width, height = (int(x) for x in params)
+        self.img_size = img_size
+        self.stride = stride
+        self.transforms = transforms
+        self.auto = auto
+        self.mode = 'stream'
+        self.frame = 0
+        self.sct = mss.mss()
+
+        # Parse monitor shape
+        monitor = self.sct.monitors[self.screen]
+        self.top = monitor["top"] if top is None else (monitor["top"] + top)
+        self.left = monitor["left"] if left is None else (monitor["left"] + left)
+        self.width = width or monitor["width"]
+        self.height = height or monitor["height"]
+        self.monitor = {"left": self.left, "top": self.top, "width": self.width, "height": self.height}
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        # mss screen capture: get raw pixels from the screen as np array
+        im0 = np.array(self.sct.grab(self.monitor))[:, :, :3]  # [:, :, :3] BGRA to BGR
+        s = f"screen {self.screen} (LTWH): {self.left},{self.top},{self.width},{self.height}: "
+
+        if self.transforms:
+            im = self.transforms(im0)  # transforms
+        else:
+            im = letterbox(im0, self.img_size, stride=self.stride, auto=self.auto)[0]  # padded resize
+            im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+            im = np.ascontiguousarray(im)  # contiguous
+        self.frame += 1
+        return str(self.screen), im, im0, None, s  # screen, img, original img, im0s, s
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------

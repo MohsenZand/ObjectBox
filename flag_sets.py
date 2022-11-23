@@ -26,7 +26,6 @@ else:
 # GENERAL
 flags.DEFINE_string('project', '<PATH>', 'save to project/name')  
 flags.DEFINE_bool('exist_ok', False, 'existing project/name ok, do not increment')
-flags.DEFINE_bool('visualize', False, 'visualize the features')
 flags.DEFINE_bool('WANDB', False, 'wandb?')
 
 flags.DEFINE_string('weights', '', 'pretrain weights, checkpoint path, objectbox.pt in test time')
@@ -76,3 +75,10 @@ flags.DEFINE_bool('verbose', True, 'report mAP by class')
 flags.DEFINE_bool('save_txt', True, 'save results to *.txt')
 flags.DEFINE_bool('save_hybrid', False, 'for hybrid auto-labelling')
 flags.DEFINE_bool('save_conf', True, 'save auto-label confidences')
+flags.DEFINE_string('source', str(ROOT/'data/images'), 'file/dir/URL/glob/screen/0(webcam)')  ###
+flags.DEFINE_bool('view_img', False, 'show results')
+flags.DEFINE_bool('save_crop', False, 'save cropped prediction boxes')
+flags.DEFINE_bool('hide_labels', False, 'hide labels')
+flags.DEFINE_bool('hide_conf', True, 'hide confidences')
+flags.DEFINE_bool('visualize', False, 'visualize features')
+flags.DEFINE_float('vis_conf_thres', 0.2, 'confidence threshold for visualization')

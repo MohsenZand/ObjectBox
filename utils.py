@@ -4,19 +4,26 @@ import datetime
 import platform
 import subprocess
 from copy import deepcopy
+import cv2
 import random
 import re
+import urllib
 from contextlib import contextmanager
+import contextlib
+from multiprocessing.pool import ThreadPool
+from itertools import repeat
 import yaml
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributed as dist
 import pkg_resources as pkg
+from zipfile import ZipFile
 import math
 import time
 import logging
 import torchvision
+from PIL import Image
 from pathlib import Path
 
 FILE = Path(__file__).resolve()
@@ -157,6 +164,25 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             break  # time limit exceeded
 
     return output
+
+
+def clean_str(s):
+    # Cleans a string by replacing special characters with underscore _
+    return re.sub(pattern="[|@#!¡·$€%&()=?¿^*;:,¨´><+]", repl="_", string=s)
+
+
+def is_docker():
+    # Is environment a Docker container?
+    return Path('/workspace').exists()  # or Path('/.dockerenv').exists()
+
+
+def is_colab():
+    # Is environment a Google Colab instance?
+    try:
+        import google.colab
+        return True
+    except ImportError:
+        return False
 
 
 class EarlyStopping:
@@ -351,6 +377,40 @@ def one_cycle(y1=0.0, y2=1.0, steps=100):
 def methods(instance):
     # Get class/instance methods
     return [f for f in dir(instance) if callable(getattr(instance, f)) and not f.startswith("__")]
+
+
+def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
+    # Multi-threaded file download and unzip function, used in data.yaml for autodownload
+    def download_one(url, dir):
+        # Download 1 file
+        f = dir / Path(url).name  # filename
+        if Path(url).is_file():  # exists in current path
+            Path(url).rename(f)  # move to dir
+        elif not f.exists():
+            print(f'Downloading {url} to {f}...')
+            if curl:
+                os.system(f"curl -L '{url}' -o '{f}' --retry 9 -C -")  # curl download, retry and resume on fail
+            else:
+                torch.hub.download_url_to_file(url, f, progress=True)  # torch download
+        if unzip and f.suffix in ('.zip', '.gz'):
+            print(f'Unzipping {f}...')
+            if f.suffix == '.zip':
+                ZipFile(f).extractall(path=dir)  # unzip
+            elif f.suffix == '.gz':
+                os.system(f'tar xfz {f} --directory {f.parent}')  # unzip
+            if delete:
+                f.unlink()  # remove zip
+
+    dir = Path(dir)
+    dir.mkdir(parents=True, exist_ok=True)  # make directory
+    if threads > 1:
+        pool = ThreadPool(threads)
+        pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multi-threaded
+        pool.close()
+        pool.join()
+    else:
+        for u in [url] if isinstance(url, (str, Path)) else url:
+            download_one(u, dir)
 
 
 def check_dataset(data, autodownload=True):
@@ -622,6 +682,60 @@ class Ensemble(nn.ModuleList):
         # y = torch.stack(y).mean(0)  # mean ensemble
         y = torch.cat(y, 1)  # nms ensemble
         return y, None  # inference, train output
+
+
+class Profile(contextlib.ContextDecorator):
+    # Usage: @Profile() decorator or 'with Profile():' context manager
+    def __enter__(self):
+        self.start = time.time()
+
+    def __exit__(self, type, value, traceback):
+        print(f'Profile results: {time.time() - self.start:.5f}s')
+
+
+def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None):
+    # Rescale boxes (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0]
+        pad = ratio_pad[1]
+
+    boxes[:, [0, 2]] -= pad[0]  # x padding
+    boxes[:, [1, 3]] -= pad[1]  # y padding
+    boxes[:, :4] /= gain
+    clip_boxes(boxes, img0_shape)
+    return boxes
+
+
+def clip_boxes(boxes, shape):
+    # Clip boxes (xyxy) to image shape (height, width)
+    if isinstance(boxes, torch.Tensor):  # faster individually
+        boxes[:, 0].clamp_(0, shape[1])  # x1
+        boxes[:, 1].clamp_(0, shape[0])  # y1
+        boxes[:, 2].clamp_(0, shape[1])  # x2
+        boxes[:, 3].clamp_(0, shape[0])  # y2
+    else:  # np.array (faster grouped)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]].clip(0, shape[1])  # x1, x2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]].clip(0, shape[0])  # y1, y2
+
+
+def save_one_box(xyxy, im, file=Path('im.jpg'), gain=1.02, pad=10, square=False, BGR=False, save=True):
+    # Save image crop as {file} with crop size multiple {gain} and {pad} pixels. Save and/or return crop
+    xyxy = torch.tensor(xyxy).view(-1, 4)
+    b = xyxy2xywh(xyxy)  # boxes
+    if square:
+        b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # attempt rectangle to square
+    b[:, 2:] = b[:, 2:] * gain + pad  # box wh * gain + pad
+    xyxy = xywh2xyxy(b).long()
+    clip_boxes(xyxy, im.shape)
+    crop = im[int(xyxy[0, 1]):int(xyxy[0, 3]), int(xyxy[0, 0]):int(xyxy[0, 2]), ::(1 if BGR else -1)]
+    if save:
+        file.parent.mkdir(parents=True, exist_ok=True)  # make directory
+        f = str(increment_path(file).with_suffix('.jpg'))
+        Image.fromarray(crop[..., ::-1]).save(f, quality=95, subsampling=0)  # save RGB
+    return crop
 
 
 @contextmanager

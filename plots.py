@@ -12,7 +12,7 @@ import seaborn as sn
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from utils import xywh2xyxy, xyxy2xywh
+from utils import xywh2xyxy, xyxy2xywh, is_docker, is_colab
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # ObjectBox root directory
@@ -46,6 +46,21 @@ def feature_visualization(x, module_type, stage, n=32, save_dir=Path('runs/detec
             print(f'Saving {save_dir / f}... ({n}/{channels})')
             plt.savefig(save_dir / f, dpi=300, bbox_inches='tight')
             plt.close()
+
+
+def check_imshow():
+    # Check if environment supports image displays
+    try:
+        assert not is_docker(), 'cv2.imshow() is disabled in Docker environments'
+        assert not is_colab(), 'cv2.imshow() is disabled in Google Colab environments'
+        cv2.imshow('test', np.zeros((1, 1, 3)))
+        cv2.waitKey(1)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+        return True
+    except Exception as e:
+        print(f'WARNING: Environment does not support cv2.imshow() or PIL Image.show() image displays\n{e}')
+        return False
 
 
 def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max_size=1920, max_subplots=16):
